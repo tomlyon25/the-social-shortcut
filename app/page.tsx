@@ -5,13 +5,35 @@ import { useState } from "react";
 export default function Home() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [answers, setAnswers] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [copyInfo, setCopyInfo] = useState<string | null>(null);
+
+  // Petit parser pour séparer analyse et réponses à partir du texte brut
+  function parseResult(raw: string) {
+    // On coupe sur "RÉPONSES PROPOSÉES"
+    const split = raw.split(/RÉPONSES PROPOSÉES\s*:/i);
+    const analysisPart = split[0]?.trim() || null;
+    const answersPart = split[1] || "";
+
+    // On récupère les lignes qui commencent par "1)", "2)", "3)" etc.
+    const lines = answersPart.split("\n");
+    const parsedAnswers = lines
+      .map((line) => line.trim())
+      .filter((line) => /^[0-9]+\)/.test(line)) // commence par "1)" "2)"...
+      .map((line) => line.replace(/^[0-9]+\)\s*/, "")); // on enlève "1) "
+
+    setAnalysis(analysisPart);
+    setAnswers(parsedAnswers);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setResult(null);
+    setAnalysis(null);
+    setAnswers([]);
+    setCopyInfo(null);
 
     if (!message.trim()) {
       setError("Colle un message d'abord 😉");
@@ -32,14 +54,28 @@ export default function Home() {
 
       if (!res.ok) {
         setError(data.error || "Erreur inconnue.");
+      } else if (data.text) {
+        parseResult(data.text);
       } else {
-        setResult(data.text || null);
+        setError("Réponse vide de l'IA.");
       }
     } catch (err) {
       console.error(err);
       setError("Erreur réseau ou serveur.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCopy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyInfo("Réponse copiée ✅");
+      setTimeout(() => setCopyInfo(null), 2000);
+    } catch (e) {
+      console.error(e);
+      setCopyInfo("Impossible de copier 😕");
+      setTimeout(() => setCopyInfo(null), 2000);
     }
   }
 
@@ -50,44 +86,79 @@ export default function Home() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#0f172a",
+        background: "radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%)",
         color: "white",
         padding: "16px",
       }}
     >
       <div
         style={{
-          maxWidth: "700px",
+          maxWidth: "850px",
           width: "100%",
-          background: "#020617",
-          borderRadius: "16px",
+          background: "rgba(15,23,42,0.95)",
+          borderRadius: "24px",
           padding: "24px",
-          boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.75)",
           border: "1px solid #1e293b",
         }}
       >
-        <h1 style={{ fontSize: "24px", marginBottom: "8px" }}>
-          The Social Shortcut
-        </h1>
-        <p style={{ fontSize: "14px", opacity: 0.8, marginBottom: "16px" }}>
-          Colle un message compliqué, je t’aide à le comprendre et à répondre intelligemment.
-        </p>
+        {/* Header */}
+        <header style={{ marginBottom: "20px" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "4px 10px",
+              borderRadius: "999px",
+              background: "rgba(56,189,248,0.1)",
+              border: "1px solid rgba(56,189,248,0.3)",
+              fontSize: "11px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#7dd3fc",
+              marginBottom: "8px",
+            }}
+          >
+            <span style={{ fontSize: "9px" }}>●</span>
+            Assistant social IA
+          </div>
+          <h1 style={{ fontSize: "26px", fontWeight: 600, marginBottom: "6px" }}>
+            The Social Shortcut
+          </h1>
+          <p style={{ fontSize: "14px", opacity: 0.78, maxWidth: "520px" }}>
+            Colle un message délicat (WhatsApp, Insta, SMS...) et laisse l’IA analyser le ton,
+            l’intention, l’émotion — puis te proposer plusieurs réponses intelligentes.
+          </p>
+        </header>
 
-        <form onSubmit={handleSubmit} style={{ marginBottom: "16px" }}>
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ marginBottom: "18px" }}>
+          <label
+            style={{
+              display: "block",
+              fontSize: "13px",
+              marginBottom: "6px",
+              opacity: 0.8,
+            }}
+          >
+            Message reçu
+          </label>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Colle ici le message que tu as reçu (WhatsApp, Insta, SMS...)"
-            rows={5}
+            placeholder="Exemple : “Franchement je trouve que tu abuses, tu ne prends jamais le temps de répondre et ça me saoule.”"
+            rows={4}
             style={{
               width: "100%",
               padding: "12px",
-              borderRadius: "8px",
-              border: "1px solid #1e293b",
+              borderRadius: "12px",
+              border: "1px solid #1f2937",
               background: "#020617",
               color: "white",
               resize: "vertical",
-              marginBottom: "12px",
+              marginBottom: "10px",
+              fontSize: "14px",
             }}
           />
           <button
@@ -95,48 +166,228 @@ export default function Home() {
             disabled={loading}
             style={{
               width: "100%",
-              padding: "10px",
-              borderRadius: "8px",
+              padding: "11px",
+              borderRadius: "999px",
               border: "none",
-              background: loading ? "#64748b" : "#38bdf8",
+              background: loading ? "#64748b" : "linear-gradient(90deg,#38bdf8,#22c55e)",
               color: "black",
-              fontWeight: "600",
+              fontWeight: 600,
+              fontSize: "14px",
               cursor: loading ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
             }}
           >
-            {loading ? "Analyse en cours..." : "Analyser & proposer des réponses"}
+            {loading ? (
+              <>
+                <span
+                  style={{
+                    width: "14px",
+                    height: "14px",
+                    borderRadius: "999px",
+                    border: "2px solid rgba(15,23,42,0.3)",
+                    borderTopColor: "#0f172a",
+                    borderRightColor: "#0f172a",
+                    animation: "spin 0.8s linear infinite",
+                  }}
+                />
+                Analyse en cours…
+              </>
+            ) : (
+              "Analyser & proposer des réponses"
+            )}
           </button>
         </form>
 
+        {/* Messages d'erreur / info */}
         {error && (
           <div
             style={{
               marginBottom: "12px",
               padding: "8px 10px",
-              borderRadius: "8px",
+              borderRadius: "10px",
               background: "#7f1d1d",
-              fontSize: "14px",
+              fontSize: "13px",
             }}
           >
             {error}
           </div>
         )}
 
-        {result && (
+        {copyInfo && (
           <div
             style={{
-              padding: "12px",
-              borderRadius: "8px",
-              background: "#020617",
-              border: "1px solid #1e293b",
-              whiteSpace: "pre-wrap",
-              fontSize: "14px",
+              marginBottom: "12px",
+              padding: "6px 9px",
+              borderRadius: "10px",
+              background: "#022c22",
+              fontSize: "12px",
+              color: "#6ee7b7",
+              border: "1px solid #065f46",
             }}
           >
-            {result}
+            {copyInfo}
           </div>
         )}
+
+        {/* Résultats */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: answers.length ? "minmax(0, 1.3fr) minmax(0, 1.2fr)" : "minmax(0,1fr)",
+            gap: "16px",
+            marginTop: analysis || answers.length ? 4 : 0,
+          }}
+        >
+          {/* Carte Analyse */}
+          {analysis && (
+            <section
+              style={{
+                padding: "14px",
+                borderRadius: "16px",
+                background: "rgba(15,23,42,0.9)",
+                border: "1px solid #1f2937",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "15px",
+                  marginBottom: "8px",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "6px",
+                    height: "6px",
+                    borderRadius: "999px",
+                    background: "#38bdf8",
+                  }}
+                />
+                Analyse du message
+              </h2>
+              <p
+                style={{
+                  fontSize: "13px",
+                  opacity: 0.86,
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.5,
+                }}
+              >
+                {analysis}
+              </p>
+            </section>
+          )}
+
+          {/* Carte Réponses */}
+          {answers.length > 0 && (
+            <section
+              style={{
+                padding: "14px",
+                borderRadius: "16px",
+                background: "rgba(15,23,42,0.9)",
+                border: "1px solid #1f2937",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "15px",
+                  marginBottom: "8px",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "6px",
+                    height: "6px",
+                    borderRadius: "999px",
+                    background: "#22c55e",
+                  }}
+                />
+                Réponses possibles
+              </h2>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {answers.map((rep, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: "9px 10px",
+                      borderRadius: "12px",
+                      background: "#020617",
+                      border: "1px solid #1f2937",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          opacity: 0.7,
+                        }}
+                      >
+                        Option {i + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(rep)}
+                        style={{
+                          border: "none",
+                          borderRadius: "999px",
+                          padding: "4px 9px",
+                          fontSize: "11px",
+                          cursor: "pointer",
+                          background: "rgba(148,163,184,0.2)",
+                          color: "#e5e7eb",
+                        }}
+                      >
+                        Copier
+                      </button>
+                    </div>
+                    <p style={{ fontSize: "13px", lineHeight: 1.5 }}>{rep}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* Petite note bas de page */}
+        <footer
+          style={{
+            marginTop: "18px",
+            fontSize: "11px",
+            opacity: 0.5,
+            textAlign: "right",
+          }}
+        >
+          Prototype personnel – responses à adapter avec ton propre jugement.
+        </footer>
       </div>
+      {/* Petite animation CSS pour le spinner */}
+      <style>
+        {`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
     </main>
   );
 }
