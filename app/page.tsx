@@ -1,28 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
+
+type StyleKey =
+  | "calme"
+  | "pro"
+  | "flirty"
+  | "direct"
+  | "empathique"
+  | "agressif"
+  | "humour"
+  | "seduction";
+
+const STYLE_LABELS: Record<StyleKey, string> = {
+  calme: "Calme & posé",
+  pro: "Professionnel",
+  flirty: "Flirty",
+  direct: "Direct / concis",
+  empathique: "Gentil & empathique",
+  agressif: "Agressif soft",
+  humour: "Humoristique",
+  seduction: "Séduction subtile",
+};
 
 export default function Home() {
   const [message, setMessage] = useState("");
+  const [style, setStyle] = useState<StyleKey>("calme");
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [copyInfo, setCopyInfo] = useState<string | null>(null);
 
-  // Petit parser pour séparer analyse et réponses à partir du texte brut
+  // Parser : sépare analyse et réponses à partir du texte brut (tolérant)
   function parseResult(raw: string) {
-    // On coupe sur "RÉPONSES PROPOSÉES"
     const split = raw.split(/RÉPONSES PROPOSÉES\s*:/i);
     const analysisPart = split[0]?.trim() || null;
     const answersPart = split[1] || "";
 
-    // On récupère les lignes qui commencent par "1)", "2)", "3)" etc.
-    const lines = answersPart.split("\n");
-    const parsedAnswers = lines
-      .map((line) => line.trim())
-      .filter((line) => /^[0-9]+\)/.test(line)) // commence par "1)" "2)"...
-      .map((line) => line.replace(/^[0-9]+\)\s*/, "")); // on enlève "1) "
+    // 1) Cas standard : réponses sur lignes "1) ...", "2) ...", "3) ..."
+    const lines = answersPart.split("\n").map((l) => l.trim()).filter(Boolean);
+    const numbered = lines
+      .filter((line) => /^[0-9]+\)/.test(line))
+      .map((line) => line.replace(/^[0-9]+\)\s*/, "").trim())
+      .filter(Boolean);
+
+    // 2) Fallback : parfois le modèle renvoie "1." au lieu de "1)"
+    const dotted = numbered.length
+      ? []
+      : lines
+          .filter((line) => /^[0-9]+\./.test(line))
+          .map((line) => line.replace(/^[0-9]+\.\s*/, "").trim())
+          .filter(Boolean);
+
+    const parsedAnswers = numbered.length ? numbered : dotted;
 
     setAnalysis(analysisPart);
     setAnswers(parsedAnswers);
@@ -44,10 +75,8 @@ export default function Home() {
     try {
       const res = await fetch("/api/shortcut", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, style }), // ✅ on envoie le style
       });
 
       const data = await res.json();
@@ -86,7 +115,8 @@ export default function Home() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%)",
+        background:
+          "radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%)",
         color: "white",
         padding: "16px",
       }}
@@ -123,10 +153,12 @@ export default function Home() {
             <span style={{ fontSize: "9px" }}>●</span>
             Assistant social IA
           </div>
+
           <h1 style={{ fontSize: "26px", fontWeight: 600, marginBottom: "6px" }}>
             The Social Shortcut
           </h1>
-          <p style={{ fontSize: "14px", opacity: 0.78, maxWidth: "520px" }}>
+
+          <p style={{ fontSize: "14px", opacity: 0.78, maxWidth: "560px" }}>
             Colle un message délicat (WhatsApp, Insta, SMS...) et laisse l’IA analyser le ton,
             l’intention, l’émotion — puis te proposer plusieurs réponses intelligentes.
           </p>
@@ -144,10 +176,11 @@ export default function Home() {
           >
             Message reçu
           </label>
+
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Exemple : “Franchement je trouve que tu abuses, tu ne prends jamais le temps de répondre et ça me saoule.”"
+            placeholder='Exemple : “Franchement je trouve que tu abuses, tu ne prends jamais le temps de répondre et ça me saoule.”'
             rows={4}
             style={{
               width: "100%",
@@ -161,6 +194,41 @@ export default function Home() {
               fontSize: "14px",
             }}
           />
+
+          {/* Select style */}
+          <label
+            style={{
+              display: "block",
+              fontSize: "13px",
+              marginBottom: "6px",
+              opacity: 0.8,
+              marginTop: "6px",
+            }}
+          >
+            Style souhaité
+          </label>
+
+          <select
+            value={style}
+            onChange={(e) => setStyle(e.target.value as StyleKey)}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: "12px",
+              border: "1px solid #1f2937",
+              background: "#020617",
+              color: "white",
+              marginBottom: "12px",
+              fontSize: "14px",
+            }}
+          >
+            {(Object.keys(STYLE_LABELS) as StyleKey[]).map((k) => (
+              <option key={k} value={k}>
+                {STYLE_LABELS[k]}
+              </option>
+            ))}
+          </select>
+
           <button
             type="submit"
             disabled={loading}
@@ -169,7 +237,9 @@ export default function Home() {
               padding: "11px",
               borderRadius: "999px",
               border: "none",
-              background: loading ? "#64748b" : "linear-gradient(90deg,#38bdf8,#22c55e)",
+              background: loading
+                ? "#64748b"
+                : "linear-gradient(90deg,#38bdf8,#22c55e)",
               color: "black",
               fontWeight: 600,
               fontSize: "14px",
@@ -196,7 +266,7 @@ export default function Home() {
                 Analyse en cours…
               </>
             ) : (
-              "Analyser & proposer des réponses"
+              `Analyser & répondre (${STYLE_LABELS[style]})`
             )}
           </button>
         </form>
@@ -236,7 +306,9 @@ export default function Home() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: answers.length ? "minmax(0, 1.3fr) minmax(0, 1.2fr)" : "minmax(0,1fr)",
+            gridTemplateColumns: answers.length
+              ? "minmax(0, 1.3fr) minmax(0, 1.2fr)"
+              : "minmax(0,1fr)",
             gap: "16px",
             marginTop: analysis || answers.length ? 4 : 0,
           }}
@@ -271,6 +343,7 @@ export default function Home() {
                 />
                 Analyse du message
               </h2>
+
               <p
                 style={{
                   fontSize: "13px",
@@ -301,74 +374,96 @@ export default function Home() {
                   fontWeight: 600,
                   display: "flex",
                   alignItems: "center",
-                  gap: "6px",
+                  justifyContent: "space-between",
+                  gap: "10px",
                 }}
               >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "999px",
+                      background: "#22c55e",
+                    }}
+                  />
+                  Réponses possibles
+                </span>
+
                 <span
                   style={{
-                    width: "6px",
-                    height: "6px",
-                    borderRadius: "999px",
-                    background: "#22c55e",
+                    fontSize: "11px",
+                    opacity: 0.7,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
                   }}
-                />
-                Réponses possibles
+                >
+                  {STYLE_LABELS[style]}
+                </span>
               </h2>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {answers.map((rep, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: "9px 10px",
-                      borderRadius: "12px",
-                      background: "#020617",
-                      border: "1px solid #1f2937",
-                    }}
-                  >
+              {answers.length === 0 ? (
+                <p style={{ fontSize: "13px", opacity: 0.8 }}>
+                  Je n’ai pas réussi à extraire les 3 réponses automatiquement. (On peut renforcer le format ensuite.)
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {answers.map((rep, i) => (
                     <div
+                      key={i}
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "4px",
+                        padding: "9px 10px",
+                        borderRadius: "12px",
+                        background: "#020617",
+                        border: "1px solid #1f2937",
                       }}
                     >
-                      <span
+                      <div
                         style={{
-                          fontSize: "11px",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.08em",
-                          opacity: 0.7,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "4px",
                         }}
                       >
-                        Option {i + 1}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(rep)}
-                        style={{
-                          border: "none",
-                          borderRadius: "999px",
-                          padding: "4px 9px",
-                          fontSize: "11px",
-                          cursor: "pointer",
-                          background: "rgba(148,163,184,0.2)",
-                          color: "#e5e7eb",
-                        }}
-                      >
-                        Copier
-                      </button>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.08em",
+                            opacity: 0.7,
+                          }}
+                        >
+                          Option {i + 1}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(rep)}
+                          style={{
+                            border: "none",
+                            borderRadius: "999px",
+                            padding: "4px 9px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                            background: "rgba(148,163,184,0.2)",
+                            color: "#e5e7eb",
+                          }}
+                        >
+                          Copier
+                        </button>
+                      </div>
+
+                      <p style={{ fontSize: "13px", lineHeight: 1.5 }}>{rep}</p>
                     </div>
-                    <p style={{ fontSize: "13px", lineHeight: 1.5 }}>{rep}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </section>
           )}
         </div>
 
-        {/* Petite note bas de page */}
+        {/* Footer */}
         <footer
           style={{
             marginTop: "18px",
@@ -377,10 +472,11 @@ export default function Home() {
             textAlign: "right",
           }}
         >
-          Prototype personnel – responses à adapter avec ton propre jugement.
+          Prototype personnel – réponses à adapter avec ton propre jugement.
         </footer>
       </div>
-      {/* Petite animation CSS pour le spinner */}
+
+      {/* Spinner animation */}
       <style>
         {`
           @keyframes spin {
