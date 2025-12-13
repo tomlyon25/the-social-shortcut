@@ -155,7 +155,7 @@ export default function Home() {
           </div>
 
           <h1 style={{ fontSize: "26px", fontWeight: 600, marginBottom: "6px" }}>
-            The Social Shortcut
+            The Social ShortcutCUTCUT
           </h1>
 
           <p style={{ fontSize: "14px", opacity: 0.78, maxWidth: "560px" }}>
