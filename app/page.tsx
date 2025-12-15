@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-type Analysis = {
+type SocialAnalysis = {
   tone: string;
   intention: string;
   emotion: string;
@@ -10,154 +10,78 @@ type Analysis = {
   risk: string;
 };
 
-type ApiResponse = {
-  analysis: Analysis;
+type DatingAnalysis = {
+  vibe: string;
+  angle: string;
+  why_it_works: string;
+};
+
+type SocialApiResponse = {
+  analysis: SocialAnalysis;
   answers: string[];
-  recommended_index?: number; // 0,1,2
+  recommended_index?: number;
 };
 
-type HistoryItem = {
-  id: string;
-  createdAt: number;
-  message: string;
-  relation: string;
-  objective: string;
-  pronoun: string;
-  length: string;
-  style: string;
-  response: ApiResponse;
+type DatingApiResponse = {
+  analysis: DatingAnalysis;
+  openers: string[];
+  backup_reply: string;
+  recommended_index?: number;
 };
 
-const ANSWER_TAGS = ["Apaiser", "Clarifier", "Poser une limite"] as const;
-const HISTORY_KEY = "tss_history_v1";
-const HISTORY_MAX = 10;
+const SOCIAL_TAGS = ["Apaiser", "Clarifier", "Poser une limite"] as const;
+const DATING_TAGS = ["Fun & légère", "Smart & observatrice", "Taquine douce"] as const;
 
 export default function Home() {
+  const [mode, setMode] = useState<"social" | "dating">("social");
+
+  // --- Social inputs
   const [message, setMessage] = useState("");
   const [relation, setRelation] = useState("ami");
   const [objective, setObjective] = useState("apaiser");
-  const [pronoun, setPronoun] = useState("tu"); // tu | vous
-  const [length, setLength] = useState("court"); // court | normal
+  const [pronoun, setPronoun] = useState("tu");
+  const [length, setLength] = useState("court");
   const [style, setStyle] = useState("calme");
 
-  const [loading, setLoading] = useState(false);
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [answers, setAnswers] = useState<string[]>([]);
-  const [recommendedIndex, setRecommendedIndex] = useState<number | null>(null);
+  // --- Dating inputs
+  const [profileText, setProfileText] = useState("");
+  const [profileContext, setProfileContext] = useState("");
+  const [avoidList, setAvoidList] = useState("trop lourd, trop sexualisé, phrases banales");
+  const [datingObjective, setDatingObjective] = useState("obtenir_reponse");
+  const [datingTone, setDatingTone] = useState("fun");
 
+  // --- UI states
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copyInfo, setCopyInfo] = useState<string | null>(null);
 
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  // --- Results
+  const [socialAnalysis, setSocialAnalysis] = useState<SocialAnalysis | null>(null);
+  const [socialAnswers, setSocialAnswers] = useState<string[]>([]);
+  const [socialRecommended, setSocialRecommended] = useState<number | null>(null);
 
-  // --- history load
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(HISTORY_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) setHistory(parsed);
-    } catch {
-      // ignore
-    }
-  }, []);
+  const [datingAnalysis, setDatingAnalysis] = useState<DatingAnalysis | null>(null);
+  const [datingOpeners, setDatingOpeners] = useState<string[]>([]);
+  const [datingBackup, setDatingBackup] = useState<string>("");
+  const [datingRecommended, setDatingRecommended] = useState<number | null>(null);
 
-  function saveToHistory(item: HistoryItem) {
-    const next = [item, ...history].slice(0, HISTORY_MAX);
-    setHistory(next);
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
-    } catch {
-      // ignore
-    }
-  }
-
-  function clearUi() {
+  function resetResults() {
     setError("");
-    setAnalysis(null);
-    setAnswers([]);
-    setRecommendedIndex(null);
     setCopyInfo(null);
+
+    setSocialAnalysis(null);
+    setSocialAnswers([]);
+    setSocialRecommended(null);
+
+    setDatingAnalysis(null);
+    setDatingOpeners([]);
+    setDatingBackup("");
+    setDatingRecommended(null);
   }
 
-  async function callApi(payload: {
-    message: string;
-    relation: string;
-    objective: string;
-    pronoun: string;
-    length: string;
-    style: string;
-  }) {
-    const res = await fetch("/api/shortcut", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || "Erreur inconnue.");
-    return data as ApiResponse;
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    clearUi();
-
-    if (!message.trim()) {
-      setError("Colle un message d'abord 😉");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const data = await callApi({ message, relation, objective, pronoun, length, style });
-
-      setAnalysis(data.analysis || null);
-      setAnswers(Array.isArray(data.answers) ? data.answers : []);
-      setRecommendedIndex(
-        typeof data.recommended_index === "number" ? data.recommended_index : null
-      );
-
-      const item: HistoryItem = {
-        id: crypto.randomUUID(),
-        createdAt: Date.now(),
-        message,
-        relation,
-        objective,
-        pronoun,
-        length,
-        style,
-        response: data,
-      };
-      saveToHistory(item);
-    } catch (err: any) {
-      setError(err?.message || "Erreur réseau ou serveur.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRegenerate() {
-    clearUi();
-
-    if (!message.trim()) {
-      setError("Colle un message d'abord 😉");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const data = await callApi({ message, relation, objective, pronoun, length, style });
-      setAnalysis(data.analysis || null);
-      setAnswers(Array.isArray(data.answers) ? data.answers : []);
-      setRecommendedIndex(
-        typeof data.recommended_index === "number" ? data.recommended_index : null
-      );
-    } catch (err: any) {
-      setError(err?.message || "Erreur réseau ou serveur.");
-    } finally {
-      setLoading(false);
-    }
+  function switchMode(next: "social" | "dating") {
+    setMode(next);
+    resetResults();
   }
 
   async function handleCopy(text: string) {
@@ -171,30 +95,13 @@ export default function Home() {
     }
   }
 
-  function loadHistoryItem(item: HistoryItem) {
-    clearUi();
-    setMessage(item.message);
-    setRelation(item.relation);
-    setObjective(item.objective);
-    setPronoun(item.pronoun);
-    setLength(item.length);
-    setStyle(item.style);
-
-    setAnalysis(item.response.analysis || null);
-    setAnswers(item.response.answers || []);
-    setRecommendedIndex(
-      typeof item.response.recommended_index === "number" ? item.response.recommended_index : null
-    );
-  }
-
-  const analysisText = useMemo(() => {
-    if (!analysis) return null;
-
-    const a = analysis.tone?.trim();
-    const b = analysis.intention?.trim();
-    const c = analysis.emotion?.trim();
-    const d = analysis.need?.trim();
-    const e = analysis.risk?.trim();
+  const socialAnalysisText = useMemo(() => {
+    if (!socialAnalysis) return null;
+    const a = socialAnalysis.tone?.trim();
+    const b = socialAnalysis.intention?.trim();
+    const c = socialAnalysis.emotion?.trim();
+    const d = socialAnalysis.need?.trim();
+    const e = socialAnalysis.risk?.trim();
 
     const parts = [
       a ? `À la lecture, ${lowerFirst(a)}` : null,
@@ -205,260 +112,327 @@ export default function Home() {
     ].filter(Boolean);
 
     return parts.join(". ") + (parts.length ? "." : "");
-  }, [analysis]);
+  }, [socialAnalysis]);
 
-  const riskBadge = useMemo(() => {
-    if (!analysis?.risk) return null;
-    const r = analysis.risk.toLowerCase();
-    if (r.includes("fort") || r.includes("élev") || r.includes("explos") || r.includes("envenim"))
-      return "Risque élevé";
-    if (r.includes("moyen") || r.includes("attention") || r.includes("tendu") || r.includes("malent"))
-      return "Risque moyen";
-    return "Risque faible";
-  }, [analysis]);
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    resetResults();
+
+    setLoading(true);
+    try {
+      if (mode === "social") {
+        if (!message.trim()) {
+          setError("Colle un message d'abord 😉");
+          return;
+        }
+
+        const res = await fetch("/api/shortcut", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, relation, objective, pronoun, length, style }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Erreur inconnue.");
+
+        const parsed = data as SocialApiResponse;
+        setSocialAnalysis(parsed.analysis || null);
+        setSocialAnswers(Array.isArray(parsed.answers) ? parsed.answers : []);
+        setSocialRecommended(typeof parsed.recommended_index === "number" ? parsed.recommended_index : null);
+      } else {
+        if (!profileText.trim()) {
+          setError("Colle le texte du profil (prompts/bio) 😉");
+          return;
+        }
+
+        const res = await fetch("/api/dating", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profileText,
+            profileContext,
+            avoidList,
+            objective: datingObjective,
+            tone: datingTone,
+            pronoun: "tu",
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Erreur inconnue.");
+
+        const parsed = data as DatingApiResponse;
+        setDatingAnalysis(parsed.analysis || null);
+        setDatingOpeners(Array.isArray(parsed.openers) ? parsed.openers : []);
+        setDatingBackup(parsed.backup_reply || "");
+        setDatingRecommended(typeof parsed.recommended_index === "number" ? parsed.recommended_index : null);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Erreur réseau / serveur.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        background: "radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%)",
-        color: "white",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 980,
-          display: "grid",
-          gridTemplateColumns: history.length ? "320px 1fr" : "1fr",
-          gap: 14,
-        }}
+    <main style={styles.page}>
+      {/* Bouton latéral : FLIRT <-> MESSAGES */}
+      <button
+        type="button"
+        onClick={() => switchMode(mode === "social" ? "dating" : "social")}
+        style={styles.sideBtn}
+        aria-label={mode === "social" ? "Aller au mode Flirt" : "Revenir au mode Messages"}
+        title={mode === "social" ? "Mode FLIRT" : "Mode MESSAGES"}
       >
-        {/* Sidebar history */}
-        {history.length > 0 && (
-          <aside
-            style={{
-              borderRadius: 18,
-              border: "1px solid #1e293b",
-              background: "rgba(15,23,42,0.92)",
-              padding: 14,
-              height: "fit-content",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: 14, opacity: 0.9 }}>Historique</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setHistory([]);
-                  try {
-                    localStorage.removeItem(HISTORY_KEY);
-                  } catch {}
-                }}
-                style={btnGhostSmall}
-              >
-                Effacer
-              </button>
-            </div>
+        {mode === "social" ? "FLIRT" : "MESSAGES"}
+      </button>
 
-            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-              {history.map((h) => (
-                <button
-                  key={h.id}
-                  type="button"
-                  onClick={() => loadHistoryItem(h)}
-                  style={{
-                    textAlign: "left",
-                    padding: 10,
-                    borderRadius: 12,
-                    border: "1px solid #1f2937",
-                    background: "#020617",
-                    color: "white",
-                    cursor: "pointer",
-                  }}
-                >
-                  <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>
-                    {new Date(h.createdAt).toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: 13, lineHeight: 1.35, opacity: 0.92 }}>
-                    {truncate(h.message, 110)}
-                  </div>
-                  <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    <Tag text={h.relation} />
-                    <Tag text={h.objective} />
-                    <Tag text={h.pronoun.toUpperCase()} />
-                    <Tag text={h.length} />
-                  </div>
-                </button>
-              ))}
-            </div>
-          </aside>
-        )}
+      <div style={styles.shell}>
+        <header style={styles.header}>
+          <div style={styles.pill}>● Assistant social IA</div>
+          <h1 style={styles.h1}>The Social Shortcut</h1>
+          <p style={styles.subtitle}>
+            {mode === "social"
+              ? "Colle un message délicat → 3 réponses humaines prêtes à envoyer."
+              : "Colle le texte du profil → 3 accroches fun prêtes à envoyer."}
+          </p>
+        </header>
 
-        {/* Main card */}
-        <div
-          style={{
-            borderRadius: 24,
-            border: "1px solid #1e293b",
-            background: "rgba(15,23,42,0.95)",
-            padding: 22,
-            boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
-          }}
-        >
-          <header style={{ marginBottom: 14 }}>
-            <div style={pill}>
-              <span style={{ fontSize: 9 }}>●</span> Assistant social IA
-            </div>
-            <h1 style={{ margin: "10px 0 6px", fontSize: 26, fontWeight: 650 }}>
-              The Social Shortcut
-            </h1>
-            <p style={{ margin: 0, fontSize: 14, opacity: 0.78, maxWidth: 640 }}>
-              Colle un message délicat. Choisis le contexte et l’objectif. L’IA te propose 3 réponses
-              prêtes à envoyer (humaines et crédibles).
-            </p>
-          </header>
+        <form onSubmit={handleSubmit} style={styles.card}>
+          {mode === "social" ? (
+            <>
+              <label style={styles.label}>Message reçu</label>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Colle le message reçu…"
+                rows={4}
+                style={styles.textarea}
+              />
 
-          <form onSubmit={handleSubmit}>
-            <label style={label}>Message reçu</label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Ex: “Franchement tu réponds jamais… j’en ai marre.”"
-              rows={4}
-              style={textarea}
-            />
+              <div style={styles.grid2}>
+                <div>
+                  <label style={styles.label}>Relation</label>
+                  <select value={relation} onChange={(e) => setRelation(e.target.value)} style={styles.select}>
+                    <option value="ami">Ami / proche</option>
+                    <option value="couple">Couple</option>
+                    <option value="ex">Ex</option>
+                    <option value="collegue">Collègue</option>
+                    <option value="manager">Manager</option>
+                    <option value="client">Client</option>
+                  </select>
+                </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-                marginTop: 10,
-              }}
-            >
-              <div>
-                <label style={label}>Relation</label>
-                <select value={relation} onChange={(e) => setRelation(e.target.value)} style={select}>
-                  <option value="ami">Ami / proche</option>
-                  <option value="couple">Couple</option>
-                  <option value="ex">Ex</option>
-                  <option value="collegue">Collègue</option>
-                  <option value="manager">Manager</option>
-                  <option value="client">Client</option>
-                </select>
+                <div>
+                  <label style={styles.label}>Objectif</label>
+                  <select value={objective} onChange={(e) => setObjective(e.target.value)} style={styles.select}>
+                    <option value="apaiser">Apaiser</option>
+                    <option value="clarifier">Clarifier</option>
+                    <option value="recadrer">Poser une limite</option>
+                    <option value="refuser">Refuser</option>
+                    <option value="relancer">Relancer</option>
+                    <option value="conclure">Clore</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={styles.label}>Tu / Vous</label>
+                  <select value={pronoun} onChange={(e) => setPronoun(e.target.value)} style={styles.select}>
+                    <option value="tu">Tu</option>
+                    <option value="vous">Vous</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={styles.label}>Longueur</label>
+                  <select value={length} onChange={(e) => setLength(e.target.value)} style={styles.select}>
+                    <option value="court">Court (SMS)</option>
+                    <option value="normal">Normal (WhatsApp)</option>
+                  </select>
+                </div>
+
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={styles.label}>Style</label>
+                  <select value={style} onChange={(e) => setStyle(e.target.value)} style={styles.select}>
+                    <option value="calme">Calme</option>
+                    <option value="pro">Professionnel</option>
+                    <option value="empathique">Empathique</option>
+                    <option value="direct">Direct</option>
+                    <option value="flirty">Flirty</option>
+                    <option value="humour">Humour</option>
+                    <option value="agressif">Agressif soft</option>
+                  </select>
+                </div>
               </div>
+            </>
+          ) : (
+            <>
+              <label style={styles.label}>Texte du profil (Hinge prompts, bio, etc.)</label>
+              <textarea
+                value={profileText}
+                onChange={(e) => setProfileText(e.target.value)}
+                placeholder="Colle ici la bio + prompts du profil…"
+                rows={5}
+                style={styles.textarea}
+              />
 
-              <div>
-                <label style={label}>Objectif</label>
-                <select value={objective} onChange={(e) => setObjective(e.target.value)} style={select}>
-                  <option value="apaiser">Apaiser</option>
-                  <option value="clarifier">Clarifier</option>
-                  <option value="recadrer">Poser une limite</option>
-                  <option value="refuser">Refuser</option>
-                  <option value="relancer">Relancer</option>
-                  <option value="conclure">Clore la discussion</option>
-                </select>
+              <label style={{ ...styles.label, marginTop: 10 }}>Éléments visibles (2–5 détails)</label>
+              <textarea
+                value={profileContext}
+                onChange={(e) => setProfileContext(e.target.value)}
+                placeholder='Ex: "photo rando, chien, voyage Lisbonne, humour second degré, fan de sushi"'
+                rows={3}
+                style={styles.textarea}
+              />
+
+              <div style={styles.grid2}>
+                <div>
+                  <label style={styles.label}>Objectif</label>
+                  <select value={datingObjective} onChange={(e) => setDatingObjective(e.target.value)} style={styles.select}>
+                    <option value="obtenir_reponse">Obtenir une réponse</option>
+                    <option value="rebond_prompt">Rebondir sur un prompt</option>
+                    <option value="proposer_date">Proposer un date léger</option>
+                    <option value="relancer">Relancer après réponse courte</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={styles.label}>Ton</label>
+                  <select value={datingTone} onChange={(e) => setDatingTone(e.target.value)} style={styles.select}>
+                    <option value="fun">Fun</option>
+                    <option value="elegant">Élégant</option>
+                    <option value="direct">Direct</option>
+                  </select>
+                </div>
+
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={styles.label}>À éviter</label>
+                  <input
+                    value={avoidList}
+                    onChange={(e) => setAvoidList(e.target.value)}
+                    placeholder="Ex: trop lourd, trop sexualisé, trop cliché"
+                    style={styles.input}
+                  />
+                </div>
               </div>
-
-              <div>
-                <label style={label}>Tu / Vous</label>
-                <select value={pronoun} onChange={(e) => setPronoun(e.target.value)} style={select}>
-                  <option value="tu">Tu</option>
-                  <option value="vous">Vous</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={label}>Longueur</label>
-                <select value={length} onChange={(e) => setLength(e.target.value)} style={select}>
-                  <option value="court">Court (SMS)</option>
-                  <option value="normal">Normal (WhatsApp)</option>
-                </select>
-              </div>
-
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={label}>Style</label>
-                <select value={style} onChange={(e) => setStyle(e.target.value)} style={select}>
-                  <option value="calme">Calme</option>
-                  <option value="pro">Professionnel</option>
-                  <option value="empathique">Empathique</option>
-                  <option value="direct">Direct</option>
-                  <option value="flirty">Flirty</option>
-                  <option value="humour">Humour</option>
-                  <option value="agressif">Agressif soft</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-              <button type="submit" disabled={loading} style={btnPrimary}>
-                {loading ? "Analyse…" : "Analyser & proposer"}
-              </button>
-              <button type="button" disabled={loading} onClick={handleRegenerate} style={btnGhost}>
-                Régénérer
-              </button>
-            </div>
-          </form>
-
-          {error && (
-            <div style={errorBox}>
-              {error}
-            </div>
+            </>
           )}
 
-          {copyInfo && (
-            <div style={okBox}>
-              {copyInfo}
-            </div>
-          )}
+          <button type="submit" disabled={loading} style={styles.btn}>
+            {loading ? "Génération…" : mode === "social" ? "Analyser & proposer" : "Créer 3 accroches"}
+          </button>
 
-          {/* Analyse */}
-          {analysis && (
-            <section style={cardSection}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                <h2 style={h2}>Lecture du message</h2>
-                {riskBadge && <span style={badge}>{riskBadge}</span>}
-              </div>
-              {analysisText && <p style={analysisP}>{analysisText}</p>}
+          {error && <div style={styles.error}>{error}</div>}
+          {copyInfo && <div style={styles.ok}>{copyInfo}</div>}
+        </form>
+
+        {/* RESULTS */}
+        <div style={styles.results}>
+          {mode === "social" && socialAnalysis && (
+            <section style={styles.resultCard}>
+              <h2 style={styles.h2}>Lecture du message</h2>
+              {socialAnalysisText && <p style={styles.p}>{socialAnalysisText}</p>}
             </section>
           )}
 
-          {/* Answers */}
-          {answers.length > 0 && (
-            <section style={{ marginTop: 14 }}>
-              {answers.map((rep, i) => {
-                const isRecommended = recommendedIndex === i;
-                return (
-                  <div key={i} style={{ ...answerCard, borderColor: isRecommended ? "rgba(34,197,94,0.45)" : "#1f2937" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={optText}>Option {i + 1}</span>
-                        <span style={tagPill}>{ANSWER_TAGS[i] ?? "Réponse"}</span>
-                        {isRecommended && <span style={recPill}>Recommandée</span>}
+          {mode === "social" && socialAnswers.length > 0 && (
+            <section style={styles.resultCard}>
+              <h2 style={styles.h2}>Réponses possibles</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+                {socialAnswers.map((rep, i) => {
+                  const rec = socialRecommended === i;
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        ...styles.answerBox,
+                        borderColor: rec ? "rgba(34,197,94,0.45)" : "#1f2937",
+                      }}
+                    >
+                      <div style={styles.answerTop}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={styles.mini}>Option {i + 1}</span>
+                          <span style={styles.tag}>{SOCIAL_TAGS[i] ?? "Réponse"}</span>
+                          {rec && <span style={styles.rec}>Recommandée</span>}
+                        </div>
+                        <button type="button" onClick={() => handleCopy(rep)} style={styles.copy}>
+                          Copier
+                        </button>
                       </div>
-
-                      <button type="button" onClick={() => handleCopy(rep)} style={btnGhostSmall}>
-                        Copier
-                      </button>
+                      <p style={styles.answerP}>{rep}</p>
                     </div>
-
-                    <p style={{ margin: "10px 0 0", fontSize: 14, lineHeight: 1.55, opacity: 0.95 }}>
-                      {rep}
-                    </p>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </section>
           )}
 
-          <footer style={{ marginTop: 16, fontSize: 11, opacity: 0.55, textAlign: "right" }}>
-            Prototype — adapte avec ton jugement.
-          </footer>
+          {mode === "dating" && datingAnalysis && (
+            <section style={styles.resultCard}>
+              <h2 style={styles.h2}>Lecture du profil</h2>
+              <p style={styles.p}>
+                <b>Vibe :</b> {datingAnalysis.vibe}
+              </p>
+              <p style={styles.p}>
+                <b>Angle :</b> {datingAnalysis.angle}
+              </p>
+              <p style={styles.p}>
+                <b>Pourquoi ça marche :</b> {datingAnalysis.why_it_works}
+              </p>
+            </section>
+          )}
+
+          {mode === "dating" && datingOpeners.length > 0 && (
+            <section style={styles.resultCard}>
+              <h2 style={styles.h2}>Accroches prêtes à envoyer</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+                {datingOpeners.map((rep, i) => {
+                  const rec = datingRecommended === i;
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        ...styles.answerBox,
+                        borderColor: rec ? "rgba(34,197,94,0.45)" : "#1f2937",
+                      }}
+                    >
+                      <div style={styles.answerTop}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={styles.mini}>Option {i + 1}</span>
+                          <span style={styles.tag}>{DATING_TAGS[i] ?? "Accroche"}</span>
+                          {rec && <span style={styles.rec}>Recommandée</span>}
+                        </div>
+                        <button type="button" onClick={() => handleCopy(rep)} style={styles.copy}>
+                          Copier
+                        </button>
+                      </div>
+                      <p style={styles.answerP}>{rep}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {datingBackup && (
+                <div style={{ ...styles.answerBox, marginTop: 14 }}>
+                  <div style={styles.answerTop}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={styles.mini}>Plan B</span>
+                      <span style={styles.tag}>Si elle répond “haha”</span>
+                    </div>
+                    <button type="button" onClick={() => handleCopy(datingBackup)} style={styles.copy}>
+                      Copier
+                    </button>
+                  </div>
+                  <p style={styles.answerP}>{datingBackup}</p>
+                </div>
+              )}
+            </section>
+          )}
         </div>
+
+        <footer style={{ marginTop: 16, fontSize: 11, opacity: 0.55, textAlign: "right" }}>
+          Prototype — adapte avec ton jugement.
+        </footer>
       </div>
     </main>
   );
@@ -469,184 +443,145 @@ function lowerFirst(s: string) {
   return s.charAt(0).toLowerCase() + s.slice(1);
 }
 
-function truncate(s: string, n: number) {
-  const t = (s || "").trim();
-  if (t.length <= n) return t;
-  return t.slice(0, n - 1).trim() + "…";
-}
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    padding: 16,
+    display: "flex",
+    justifyContent: "center",
+    background: "radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%)",
+    color: "white",
+    position: "relative",
+  },
+  shell: { width: "100%", maxWidth: 900 },
+  header: { marginBottom: 14 },
+  pill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "4px 10px",
+    borderRadius: 999,
+    background: "rgba(56,189,248,0.10)",
+    border: "1px solid rgba(56,189,248,0.25)",
+    fontSize: 11,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: "#7dd3fc",
+  },
+  h1: { margin: "10px 0 6px", fontSize: 26, fontWeight: 650 },
+  subtitle: { margin: 0, fontSize: 14, opacity: 0.78 },
 
-function Tag({ text }: { text: string }) {
-  return (
-    <span
-      style={{
-        fontSize: 10,
-        padding: "2px 6px",
-        borderRadius: 999,
-        border: "1px solid rgba(148,163,184,0.35)",
-        background: "rgba(148,163,184,0.12)",
-        opacity: 0.9,
-      }}
-    >
-      {text}
-    </span>
-  );
-}
+  sideBtn: {
+    position: "fixed",
+    right: 14,
+    top: "50%",
+    transform: "translateY(-50%)",
+    padding: "12px 14px",
+    borderRadius: 999,
+    border: "1px solid rgba(148,163,184,0.35)",
+    background: "rgba(148,163,184,0.14)",
+    color: "white",
+    fontWeight: 900,
+    letterSpacing: "0.14em",
+    cursor: "pointer",
+    zIndex: 50,
+    backdropFilter: "blur(8px)",
+  },
 
-const pill: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "4px 10px",
-  borderRadius: 999,
-  background: "rgba(56,189,248,0.10)",
-  border: "1px solid rgba(56,189,248,0.25)",
-  fontSize: 11,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: "#7dd3fc",
-};
-
-const label: React.CSSProperties = {
-  display: "block",
-  fontSize: 12,
-  opacity: 0.8,
-  marginBottom: 6,
-};
-
-const textarea: React.CSSProperties = {
-  width: "100%",
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #1f2937",
-  background: "#020617",
-  color: "white",
-  resize: "vertical",
-  fontSize: 14,
-};
-
-const select: React.CSSProperties = {
-  width: "100%",
-  padding: 10,
-  borderRadius: 999,
-  border: "1px solid #1f2937",
-  background: "#020617",
-  color: "white",
-  fontSize: 13,
-};
-
-const btnPrimary: React.CSSProperties = {
-  flex: 1,
-  padding: 12,
-  borderRadius: 999,
-  border: "none",
-  background: "linear-gradient(90deg,#38bdf8,#22c55e)",
-  color: "black",
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-const btnGhost: React.CSSProperties = {
-  width: 160,
-  padding: 12,
-  borderRadius: 999,
-  border: "1px solid rgba(148,163,184,0.35)",
-  background: "rgba(148,163,184,0.12)",
-  color: "white",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const btnGhostSmall: React.CSSProperties = {
-  border: "none",
-  borderRadius: 999,
-  padding: "6px 10px",
-  background: "rgba(148,163,184,0.15)",
-  color: "white",
-  cursor: "pointer",
-  fontSize: 12,
-};
-
-const errorBox: React.CSSProperties = {
-  marginTop: 12,
-  padding: 10,
-  borderRadius: 12,
-  background: "#7f1d1d",
-  fontSize: 13,
-};
-
-const okBox: React.CSSProperties = {
-  marginTop: 12,
-  padding: 10,
-  borderRadius: 12,
-  background: "rgba(34,197,94,0.12)",
-  border: "1px solid rgba(34,197,94,0.25)",
-  fontSize: 13,
-  color: "#bbf7d0",
-};
-
-const cardSection: React.CSSProperties = {
-  marginTop: 14,
-  padding: 14,
-  borderRadius: 16,
-  background: "rgba(2,6,23,0.55)",
-  border: "1px solid #1f2937",
-};
-
-const h2: React.CSSProperties = {
-  margin: 0,
-  fontSize: 15,
-  fontWeight: 800,
-  opacity: 0.95,
-};
-
-const badge: React.CSSProperties = {
-  fontSize: 11,
-  padding: "3px 8px",
-  borderRadius: 999,
-  border: "1px solid rgba(148,163,184,0.35)",
-  background: "rgba(148,163,184,0.12)",
-  whiteSpace: "nowrap",
-  opacity: 0.9,
-  height: "fit-content",
-};
-
-const analysisP: React.CSSProperties = {
-  marginTop: 10,
-  marginBottom: 0,
-  opacity: 0.88,
-  lineHeight: 1.55,
-  fontSize: 14,
-};
-
-const answerCard: React.CSSProperties = {
-  marginBottom: 10,
-  padding: 12,
-  borderRadius: 14,
-  background: "#020617",
-  border: "1px solid #1f2937",
-};
-
-const optText: React.CSSProperties = {
-  fontSize: 11,
-  opacity: 0.7,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-};
-
-const tagPill: React.CSSProperties = {
-  fontSize: 11,
-  padding: "3px 8px",
-  borderRadius: 999,
-  background: "rgba(148,163,184,0.15)",
-  border: "1px solid rgba(148,163,184,0.35)",
-  whiteSpace: "nowrap",
-};
-
-const recPill: React.CSSProperties = {
-  fontSize: 11,
-  padding: "3px 8px",
-  borderRadius: 999,
-  background: "rgba(34,197,94,0.16)",
-  border: "1px solid rgba(34,197,94,0.35)",
-  whiteSpace: "nowrap",
+  card: {
+    background: "rgba(15,23,42,0.95)",
+    border: "1px solid #1e293b",
+    borderRadius: 24,
+    padding: 18,
+    boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
+  },
+  label: { display: "block", fontSize: 12, opacity: 0.8, marginBottom: 6 },
+  textarea: {
+    width: "100%",
+    padding: 12,
+    borderRadius: 12,
+    border: "1px solid #1f2937",
+    background: "#020617",
+    color: "white",
+    resize: "vertical",
+    fontSize: 14,
+  },
+  input: {
+    width: "100%",
+    padding: 10,
+    borderRadius: 999,
+    border: "1px solid #1f2937",
+    background: "#020617",
+    color: "white",
+    fontSize: 13,
+  },
+  select: {
+    width: "100%",
+    padding: 10,
+    borderRadius: 999,
+    border: "1px solid #1f2937",
+    background: "#020617",
+    color: "white",
+    fontSize: 13,
+  },
+  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 },
+  btn: {
+    marginTop: 12,
+    width: "100%",
+    padding: 12,
+    borderRadius: 999,
+    border: "none",
+    background: "linear-gradient(90deg,#38bdf8,#22c55e)",
+    color: "black",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  error: { marginTop: 12, padding: 10, borderRadius: 12, background: "#7f1d1d", fontSize: 13 },
+  ok: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 12,
+    background: "rgba(34,197,94,0.12)",
+    border: "1px solid rgba(34,197,94,0.25)",
+    fontSize: 13,
+    color: "#bbf7d0",
+  },
+  results: { marginTop: 14, display: "grid", gap: 12 },
+  resultCard: {
+    padding: 14,
+    borderRadius: 16,
+    background: "rgba(2,6,23,0.55)",
+    border: "1px solid #1f2937",
+  },
+  h2: { margin: 0, fontSize: 15, fontWeight: 800, opacity: 0.95 },
+  p: { margin: "10px 0 0", opacity: 0.88, lineHeight: 1.55, fontSize: 14 },
+  answerBox: { padding: 12, borderRadius: 14, background: "#020617", border: "1px solid #1f2937" },
+  answerTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 },
+  mini: { fontSize: 11, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.08em" },
+  tag: {
+    fontSize: 11,
+    padding: "3px 8px",
+    borderRadius: 999,
+    background: "rgba(148,163,184,0.15)",
+    border: "1px solid rgba(148,163,184,0.35)",
+    whiteSpace: "nowrap",
+  },
+  rec: {
+    fontSize: 11,
+    padding: "3px 8px",
+    borderRadius: 999,
+    background: "rgba(34,197,94,0.16)",
+    border: "1px solid rgba(34,197,94,0.35)",
+    whiteSpace: "nowrap",
+  },
+  copy: {
+    border: "none",
+    borderRadius: 999,
+    padding: "6px 10px",
+    background: "rgba(148,163,184,0.15)",
+    color: "white",
+    cursor: "pointer",
+    fontSize: 12,
+  },
+  answerP: { margin: "10px 0 0", fontSize: 14, lineHeight: 1.55, opacity: 0.95 },
 };
