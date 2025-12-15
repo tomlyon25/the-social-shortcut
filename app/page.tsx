@@ -10,6 +10,8 @@ type Analysis = {
   risk: string;
 };
 
+const ANSWER_TAGS = ["Apaiser", "Clarifier", "Poser une limite"] as const;
+
 export default function Home() {
   const [message, setMessage] = useState("");
   const [style, setStyle] = useState("calme");
@@ -47,8 +49,7 @@ export default function Home() {
         setAnalysis(data.analysis);
         setAnswers(data.answers || []);
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
       setError("Erreur réseau ou serveur.");
     } finally {
       setLoading(false);
@@ -56,14 +57,9 @@ export default function Home() {
   }
 
   async function handleCopy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopyInfo("Réponse copiée ✅");
-      setTimeout(() => setCopyInfo(null), 2000);
-    } catch {
-      setCopyInfo("Impossible de copier 😕");
-      setTimeout(() => setCopyInfo(null), 2000);
-    }
+    await navigator.clipboard.writeText(text);
+    setCopyInfo("Réponse copiée ✅");
+    setTimeout(() => setCopyInfo(null), 2000);
   }
 
   return (
@@ -86,35 +82,26 @@ export default function Home() {
           background: "rgba(15,23,42,0.95)",
           borderRadius: 24,
           padding: 24,
-          boxShadow: "0 24px 60px rgba(0,0,0,0.75)",
           border: "1px solid #1e293b",
         }}
       >
-        {/* Header */}
-        <header style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 600 }}>
-            The Social Shortcut
-          </h1>
-          <p style={{ fontSize: 14, opacity: 0.8 }}>
-            Analyse un message délicat et obtiens des réponses intelligentes,
-            humaines et adaptées.
-          </p>
-        </header>
+        <h1 style={{ fontSize: 26, fontWeight: 600 }}>
+          The Social Shortcut
+        </h1>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ marginBottom: 18 }}>
+        <form onSubmit={handleSubmit} style={{ marginTop: 16 }}>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Colle ici le message reçu…"
+            placeholder="Colle le message reçu…"
             rows={4}
             style={{
               width: "100%",
               padding: 12,
               borderRadius: 12,
-              border: "1px solid #1f2937",
               background: "#020617",
               color: "white",
+              border: "1px solid #1f2937",
               marginBottom: 10,
             }}
           />
@@ -148,54 +135,65 @@ export default function Home() {
               width: "100%",
               padding: 12,
               borderRadius: 999,
-              border: "none",
               background: loading
                 ? "#64748b"
                 : "linear-gradient(90deg,#38bdf8,#22c55e)",
               color: "black",
               fontWeight: 600,
-              cursor: loading ? "not-allowed" : "pointer",
+              border: "none",
             }}
           >
-            {loading ? "Analyse en cours…" : "Analyser & proposer des réponses"}
+            {loading ? "Analyse en cours…" : "Analyser & proposer"}
           </button>
         </form>
 
-        {error && (
-          <div style={{ background: "#7f1d1d", padding: 10, borderRadius: 8 }}>
-            {error}
-          </div>
-        )}
-
         {analysis && (
-          <section style={{ marginTop: 16 }}>
-            <h2>Analyse</h2>
-            <ul style={{ fontSize: 14, opacity: 0.85 }}>
-              <li><b>Ton :</b> {analysis.tone}</li>
-              <li><b>Intention :</b> {analysis.intention}</li>
-              <li><b>Émotion :</b> {analysis.emotion}</li>
-              <li><b>Besoin :</b> {analysis.need}</li>
-              <li><b>Risque :</b> {analysis.risk}</li>
-            </ul>
+          <section style={{ marginTop: 20, fontSize: 14, opacity: 0.9 }}>
+            <p><b>Lecture :</b> {analysis.tone}</p>
+            <p><b>Ce que l’autre exprime :</b> {analysis.intention}</p>
+            <p><b>Émotion probable :</b> {analysis.emotion}</p>
+            <p><b>Besoin :</b> {analysis.need}</p>
+            <p><b>Risque :</b> {analysis.risk}</p>
           </section>
         )}
 
         {answers.length > 0 && (
-          <section style={{ marginTop: 16 }}>
-            <h2>Réponses possibles</h2>
+          <section style={{ marginTop: 20 }}>
             {answers.map((rep, i) => (
               <div
                 key={i}
                 style={{
-                  marginTop: 8,
-                  padding: 10,
-                  borderRadius: 10,
+                  marginBottom: 10,
+                  padding: 12,
+                  borderRadius: 12,
                   background: "#020617",
                   border: "1px solid #1f2937",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Option {i + 1}</span>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <span style={{ fontSize: 11, opacity: 0.7 }}>
+                      Option {i + 1}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: "3px 8px",
+                        borderRadius: 999,
+                        background: "rgba(148,163,184,0.15)",
+                        border: "1px solid rgba(148,163,184,0.35)",
+                      }}
+                    >
+                      {ANSWER_TAGS[i]}
+                    </span>
+                  </div>
                   <button onClick={() => handleCopy(rep)}>Copier</button>
                 </div>
                 <p>{rep}</p>
@@ -204,7 +202,8 @@ export default function Home() {
           </section>
         )}
 
-        {copyInfo && <div style={{ marginTop: 8 }}>{copyInfo}</div>}
+        {copyInfo && <div>{copyInfo}</div>}
+        {error && <div style={{ color: "#f87171" }}>{error}</div>}
       </div>
     </main>
   );
